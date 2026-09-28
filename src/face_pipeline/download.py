@@ -69,7 +69,7 @@ def download_models(force: bool = False) -> list[tuple[Path, str]]:
         temporary = path.with_suffix(path.suffix + ".part")
         request = urllib.request.Request(
             spec.url,
-            headers={"User-Agent": "sce-face-pipeline/0.1"},
+            headers={"User-Agent": "local-face-recognition-pipeline/0.2"},
         )
         try:
             with urllib.request.urlopen(request, timeout=90) as response:

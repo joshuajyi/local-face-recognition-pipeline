@@ -49,7 +49,7 @@ class OpenCVFaceModels:
         for path in (detector_path, recognizer_path):
             if not path.exists():
                 raise FileNotFoundError(
-                    f"Missing model: {path}. Run `uv run sce-face download-models` first."
+                    f"Missing model: {path}. Run `uv run face-pipeline download-models` first."
                 )
 
         self.detector = cv.FaceDetectorYN.create(

@@ -20,6 +20,11 @@ from face_pipeline.config import (
     DEFAULT_RECOGNIZER_PATH,
 )
 from face_pipeline.download import download_models, sha256
+from face_pipeline.evaluation import (
+    EvaluationRecord,
+    discover_evaluation_cases,
+    summarize_evaluation,
+)
 from face_pipeline.gallery import Gallery
 from face_pipeline.pipeline import RecognitionPipeline
 from face_pipeline.vision import OpenCVFaceModels
@@ -117,7 +122,7 @@ def recognize_image(args: argparse.Namespace, pipeline: RecognitionPipeline) -> 
     print_analysis(analysis)
     print(f"annotated image saved to {output_path}")
     if args.show:
-        cv.imshow("SCE Face Recognition", annotated)
+        cv.imshow("Local Face Recognition", annotated)
         cv.waitKey(0)
         cv.destroyAllWindows()
     return 0
@@ -141,7 +146,7 @@ def recognize_camera(args: argparse.Namespace, pipeline: RecognitionPipeline) ->
                 raise RuntimeError("Camera stopped returning frames")
             analysis = pipeline.analyze(frame)
             annotated = pipeline.draw(frame, analysis)
-            cv.imshow("SCE Face Recognition", annotated)
+            cv.imshow("Local Face Recognition", annotated)
             key = cv.waitKey(1) & 0xFF
             if key in (ord("q"), 27):
                 break
@@ -251,9 +256,57 @@ def command_benchmark(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_evaluate(args: argparse.Namespace) -> int:
+    gallery = Gallery.load(args.gallery)
+    if not gallery.names:
+        raise ValueError("Gallery is empty. Enroll at least one profile before evaluation.")
+
+    cases = discover_evaluation_cases(args.dataset)
+    pipeline = RecognitionPipeline(build_models(args), gallery, args.threshold)
+    records: list[EvaluationRecord] = []
+
+    for case in cases:
+        analysis = pipeline.analyze(read_image(case.image))
+        predicted: str | None = None
+        score: float | None = None
+        if len(analysis.faces) == 1:
+            predicted = analysis.faces[0].match.label
+            score = analysis.faces[0].match.score
+
+        record = EvaluationRecord(
+            image=str(case.image),
+            expected=case.expected,
+            predicted=predicted,
+            score=score,
+            face_count=len(analysis.faces),
+        )
+        records.append(record)
+        score_text = "n/a" if score is None else f"{score:.3f}"
+        prediction_text = predicted or "n/a"
+        print(
+            f"{case.image}: expected={case.expected!r} predicted={prediction_text!r} "
+            f"score={score_text} outcome={record.outcome}"
+        )
+
+    summary = summarize_evaluation(records)
+    report = {
+        "created_at_utc": datetime.now(UTC).isoformat(),
+        "dataset": str(args.dataset),
+        "similarity_threshold": args.threshold,
+        "gallery_profiles": list(gallery.names),
+        "summary": summary,
+        "results": [record.as_dict() for record in records],
+    }
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(summary, indent=2))
+    print(f"evaluation details saved to {args.output}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="sce-face",
+        prog="face-pipeline",
         description="Local YuNet + SFace facial-recognition pipeline",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -295,6 +348,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_pipeline_arguments(benchmark_parser)
     benchmark_parser.set_defaults(handler=command_benchmark)
+
+    evaluate_parser = subparsers.add_parser(
+        "evaluate",
+        help="Evaluate labeled single-face images stored in subfolders",
+    )
+    evaluate_parser.add_argument(
+        "dataset",
+        type=Path,
+        help="Directory containing one subfolder per expected identity",
+    )
+    evaluate_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("outputs/evaluation.json"),
+    )
+    add_pipeline_arguments(evaluate_parser)
+    evaluate_parser.set_defaults(handler=command_evaluate)
 
     return parser
 

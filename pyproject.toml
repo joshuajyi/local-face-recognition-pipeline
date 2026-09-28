@@ -1,7 +1,7 @@
 [project]
-name = "sce-face-pipeline"
-version = "0.1.0"
-description = "A local face detection and recognition pipeline for the SCE AI x FPGA take-home project"
+name = "local-face-recognition-pipeline"
+version = "0.2.0"
+description = "A local end-to-end face recognition pipeline built with YuNet, SFace, and OpenCV"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
-sce-face = "face_pipeline.cli:main"
+face-pipeline = "face_pipeline.cli:main"
 
 [dependency-groups]
 dev = [
@@ -35,4 +35,3 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-
